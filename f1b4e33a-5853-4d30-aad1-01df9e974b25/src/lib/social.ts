@@ -44,3 +44,52 @@ export function numeroCurto(n: number) {
   if (n >= 1000) return `${(n / 1000).toFixed(1).replace(".", ",")}K`;
   return String(n);
 }
+
+export const FORMATOS = [
+  "Reels",
+  "Carrossel",
+  "Post estático",
+  "Story",
+  "Artigo",
+];
+
+export const TONS = [
+  "Direto",
+  "Amigável",
+  "Provocativo",
+  "Técnico",
+  "Inspirador",
+];
+
+// Cor sólida da rede, para marcadores pequenos (pontos do calendário, legenda).
+export function corPontoRede(rede: string) {
+  switch (rede) {
+    case "Instagram":
+      return "bg-volt";
+    case "TikTok":
+      return "bg-cyan";
+    case "LinkedIn":
+      return "bg-fg/40";
+    case "YouTube":
+      return "bg-destructive";
+    default:
+      return "bg-mute";
+  }
+}
+
+export function formatarDataCompleta(data: Date | string) {
+  return new Date(data).toLocaleString("pt-BR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+// Valor aceito por <input type="datetime-local">, no fuso do navegador.
+export function paraInputLocal(data: Date) {
+  const deslocamento = data.getTimezoneOffset() * 60000;
+  return new Date(data.getTime() - deslocamento).toISOString().slice(0, 16);
+}
