@@ -16,6 +16,7 @@ import { Route as CalendarioRouteImport } from './routes/calendario'
 import { Route as ComposicaoRouteImport } from './routes/composicao'
 import { Route as ContasRouteImport } from './routes/contas'
 import { Route as RelatoriosRouteImport } from './routes/relatorios'
+import { Route as ApiOauthCallbackRedeRouteImport } from './routes/api/oauth/callback/$rede'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -52,6 +53,11 @@ const RelatoriosRoute = RelatoriosRouteImport.update({
   path: '/relatorios',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiOauthCallbackRedeRoute = ApiOauthCallbackRedeRouteImport.update({
+  id: '/api/oauth/callback/$rede',
+  path: '/api/oauth/callback/$rede',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -61,6 +67,7 @@ export interface FileRoutesByFullPath {
   '/composicao': typeof ComposicaoRoute
   '/contas': typeof ContasRoute
   '/relatorios': typeof RelatoriosRoute
+  '/api/oauth/callback/$rede': typeof ApiOauthCallbackRedeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -70,6 +77,7 @@ export interface FileRoutesByTo {
   '/composicao': typeof ComposicaoRoute
   '/contas': typeof ContasRoute
   '/relatorios': typeof RelatoriosRoute
+  '/api/oauth/callback/$rede': typeof ApiOauthCallbackRedeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -80,6 +88,7 @@ export interface FileRoutesById {
   '/composicao': typeof ComposicaoRoute
   '/contas': typeof ContasRoute
   '/relatorios': typeof RelatoriosRoute
+  '/api/oauth/callback/$rede': typeof ApiOauthCallbackRedeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -91,6 +100,7 @@ export interface FileRouteTypes {
     | '/composicao'
     | '/contas'
     | '/relatorios'
+    | '/api/oauth/callback/$rede'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -100,6 +110,7 @@ export interface FileRouteTypes {
     | '/composicao'
     | '/contas'
     | '/relatorios'
+    | '/api/oauth/callback/$rede'
   id:
     | '__root__'
     | '/'
@@ -109,6 +120,7 @@ export interface FileRouteTypes {
     | '/composicao'
     | '/contas'
     | '/relatorios'
+    | '/api/oauth/callback/$rede'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -119,6 +131,7 @@ export interface RootRouteChildren {
   ComposicaoRoute: typeof ComposicaoRoute
   ContasRoute: typeof ContasRoute
   RelatoriosRoute: typeof RelatoriosRoute
+  ApiOauthCallbackRedeRoute: typeof ApiOauthCallbackRedeRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -172,6 +185,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RelatoriosRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/oauth/callback/$rede': {
+      id: '/api/oauth/callback/$rede'
+      path: '/api/oauth/callback/$rede'
+      fullPath: '/api/oauth/callback/$rede'
+      preLoaderRoute: typeof ApiOauthCallbackRedeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -183,6 +203,7 @@ const rootRouteChildren: RootRouteChildren = {
   ComposicaoRoute: ComposicaoRoute,
   ContasRoute: ContasRoute,
   RelatoriosRoute: RelatoriosRoute,
+  ApiOauthCallbackRedeRoute: ApiOauthCallbackRedeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
