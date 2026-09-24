@@ -3,17 +3,18 @@ import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { supabase } from "@/integrations/supabase/client";
 import { corDaRede, formatarHora, numeroCurto } from "@/lib/social";
+import { tituloPagina } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Painel — BMZ Trend Focus" },
+      { title: tituloPagina("Painel") },
       {
         name: "description",
         content:
           "Acompanhe alcance, engajamento e os próximos posts agendados das suas redes sociais.",
       },
-      { property: "og:title", content: "Painel — BMZ Trend Focus" },
+      { property: "og:title", content: tituloPagina("Painel") },
       {
         property: "og:description",
         content: "Alcance, engajamento e próximos posts em um só lugar.",

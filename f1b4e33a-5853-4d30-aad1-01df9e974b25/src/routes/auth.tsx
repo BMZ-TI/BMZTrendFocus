@@ -4,17 +4,18 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
 import { useAuth } from "@/hooks/use-auth";
+import { tituloPagina } from "@/lib/utils";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
-      { title: "Entrar — BMZ Trend Focus" },
+      { title: tituloPagina("Entrar") },
       {
         name: "description",
         content:
           "Acesse o BMZ Trend Focus para agendar posts, gerar conteúdo com IA e acompanhar suas redes.",
       },
-      { property: "og:title", content: "Entrar — BMZ Trend Focus" },
+      { property: "og:title", content: tituloPagina("Entrar") },
       {
         property: "og:description",
         content: "Acesse sua central de comando de redes sociais.",
