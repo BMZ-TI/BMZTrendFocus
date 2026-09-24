@@ -104,29 +104,76 @@ export type Database = {
       social_accounts: {
         Row: {
           conectada: boolean
+          conectada_em: string | null
           created_at: string
           handle: string
           id: string
           rede: string
           user_id: string
+          usuario_externo: string | null
         }
         Insert: {
           conectada?: boolean
+          conectada_em?: string | null
           created_at?: string
           handle: string
           id?: string
           rede: string
           user_id?: string
+          usuario_externo?: string | null
         }
         Update: {
           conectada?: boolean
+          conectada_em?: string | null
           created_at?: string
           handle?: string
           id?: string
           rede?: string
           user_id?: string
+          usuario_externo?: string | null
         }
         Relationships: []
+      }
+      social_tokens: {
+        Row: {
+          access_token: string
+          atualizado_em: string
+          conta_id: string
+          escopos: string | null
+          expira_em: string | null
+          id_externo: string | null
+          refresh_token: string | null
+          user_id: string
+        }
+        Insert: {
+          access_token: string
+          atualizado_em?: string
+          conta_id: string
+          escopos?: string | null
+          expira_em?: string | null
+          id_externo?: string | null
+          refresh_token?: string | null
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          atualizado_em?: string
+          conta_id?: string
+          escopos?: string | null
+          expira_em?: string | null
+          id_externo?: string | null
+          refresh_token?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_tokens_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: true
+            referencedRelation: "social_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

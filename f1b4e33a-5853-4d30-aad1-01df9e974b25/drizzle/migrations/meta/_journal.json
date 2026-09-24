@@ -8,6 +8,13 @@
       "when": 1790260828604,
       "tag": "0000_create_prisma_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790277942640,
+      "tag": "0001_conexao_redes",
+      "breakpoints": true
     }
   ]
 }
