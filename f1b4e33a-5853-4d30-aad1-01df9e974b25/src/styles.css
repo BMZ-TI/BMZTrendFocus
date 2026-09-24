@@ -1,0 +1,145 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * BMZ Trend Focus — central de comando de redes sociais.
+ * Direção: kinetic glass command deck (deep navy, laranja neon, Anton display).
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+
+  --font-display: var(--font-display-family);
+  --font-body: var(--font-body-family);
+  --font-mono: var(--font-mono-family);
+
+  --color-ink: var(--ink);
+  --color-panel: var(--panel);
+  --color-line: var(--line);
+  --color-fg: var(--fg);
+  --color-mute: var(--mute);
+  --color-volt: var(--volt);
+  --color-cyan: var(--cyan);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-sidebar: var(--panel);
+  --color-sidebar-foreground: var(--fg);
+  --color-sidebar-primary: var(--volt);
+  --color-sidebar-primary-foreground: var(--ink);
+  --color-sidebar-accent: var(--line);
+  --color-sidebar-accent-foreground: var(--fg);
+  --color-sidebar-border: var(--line);
+  --color-sidebar-ring: var(--volt);
+
+  --animate-rise: rise 0.45s cubic-bezier(0.32, 0.72, 0, 1) both;
+  --animate-sweep: sweep 0.5s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+:root {
+  --radius: 0.75rem;
+
+  --font-display-family: "Anton", sans-serif;
+  --font-body-family: "Inter", sans-serif;
+  --font-mono-family: "JetBrains Mono", monospace;
+
+  --ink: oklch(0.13 0.028 258);
+  --panel: oklch(0.18 0.032 258);
+  --line: oklch(0.26 0.035 258);
+  --fg: oklch(0.95 0.012 250);
+  --mute: oklch(0.65 0.03 252);
+  --volt: oklch(0.72 0.22 45);
+  --cyan: oklch(0.75 0.12 215);
+
+  --background: var(--ink);
+  --foreground: var(--fg);
+  --card: var(--panel);
+  --card-foreground: var(--fg);
+  --popover: var(--panel);
+  --popover-foreground: var(--fg);
+  --primary: var(--volt);
+  --primary-foreground: var(--ink);
+  --secondary: var(--line);
+  --secondary-foreground: var(--fg);
+  --muted: var(--line);
+  --muted-foreground: var(--mute);
+  --accent: var(--cyan);
+  --accent-foreground: var(--ink);
+  --destructive: oklch(0.63 0.22 25);
+  --destructive-foreground: oklch(0.97 0.01 265);
+  --border: var(--line);
+  --input: var(--line);
+  --ring: var(--volt);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes sweep {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@utility panel-card {
+  border-radius: var(--radius);
+  background-color: var(--panel);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--fg) 6%, transparent);
+}
+
+@utility label-mono {
+  font-family: var(--font-mono-family);
+  font-size: 10px;
+  line-height: 1.2;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--mute);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-body-family);
+  }
+}
