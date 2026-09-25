@@ -55,7 +55,7 @@ type ResumoRede = {
 const PERIODOS: { valor: Periodo; rotulo: string; descricao: string }[] = [
   { valor: "ano", rotulo: "Ano", descricao: "nos últimos 12 meses" },
   { valor: "mes", rotulo: "Mês", descricao: "nos últimos 30 dias" },
-  { valor: "semana", rotulo: "Semana", descricao: "nos últimos 7 dias" },
+  { valor: "semana", rotulo: "Semana", descricao: "na semana atual, de segunda a domingo" },
   { valor: "hoje", rotulo: "Hoje", descricao: "hoje, hora a hora" },
 ];
 
@@ -84,38 +84,69 @@ function inicioPeriodo(periodo: Periodo, agora: Date) {
     new Date(agora.getFullYear(), agora.getMonth(), agora.getDate() - volta);
   if (periodo === "ano") return new Date(agora.getFullYear(), agora.getMonth() - 11, 1);
   if (periodo === "mes") return dia(29);
-  if (periodo === "semana") return dia(6);
+  if (periodo === "semana") return dia((agora.getDay() + 6) % 7); // segunda-feira desta semana
   return dia(0);
 }
 
+type Ponto = {
+  rotulo: string;
+  detalhe: string; // rótulo completo, mostrado no tooltip
+  diaSemana: string | null; // semana: "seg", "ter"… abaixo da data
+  inicioMes: string | null; // mês: nome do mês no dia 1 (e na primeira fatia)
+  alcance: number;
+};
+
+const curtoSemPonto = (data: Date, opcoes: Intl.DateTimeFormatOptions) =>
+  data.toLocaleDateString("pt-BR", opcoes).replace(".", "");
+
 // Alcance somado por fatia do período: meses (ano), dias (mês/semana) ou horas (hoje).
-function serieAlcance(posts: Post[], periodo: Periodo, agora: Date) {
+function serieAlcance(posts: Post[], periodo: Periodo, agora: Date): Ponto[] {
   const inicio = inicioPeriodo(periodo, agora);
-  let pontos: { rotulo: string; alcance: number }[];
+  let pontos: Ponto[];
   let indice: (data: Date) => number;
 
   if (periodo === "hoje") {
-    pontos = Array.from({ length: 24 }, (_, h) => ({ rotulo: `${h}h`, alcance: 0 }));
-    indice = (data) => (data >= inicio ? data.getHours() : -1);
-  } else if (periodo === "ano") {
-    pontos = Array.from({ length: 12 }, (_, i) => ({
-      rotulo: new Date(inicio.getFullYear(), inicio.getMonth() + i, 1)
-        .toLocaleDateString("pt-BR", { month: "short" })
-        .replace(".", ""),
+    const hoje = agora.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    pontos = Array.from({ length: 24 }, (_, h) => ({
+      rotulo: `${h}h`,
+      detalhe: `${hoje}, das ${h}h às ${h + 1}h`,
+      diaSemana: null,
+      inicioMes: null,
       alcance: 0,
     }));
+    indice = (data) => (data >= inicio ? data.getHours() : -1);
+  } else if (periodo === "ano") {
+    pontos = Array.from({ length: 12 }, (_, i) => {
+      const mes = new Date(inicio.getFullYear(), inicio.getMonth() + i, 1);
+      return {
+        rotulo: curtoSemPonto(mes, { month: "short" }),
+        detalhe: mes.toLocaleDateString("pt-BR", { month: "long", year: "numeric" }),
+        diaSemana: null,
+        inicioMes: null,
+        alcance: 0,
+      };
+    });
     indice = (data) =>
       (data.getFullYear() - inicio.getFullYear()) * 12 + data.getMonth() - inicio.getMonth();
   } else {
     const dias = periodo === "semana" ? 7 : 30;
-    pontos = Array.from({ length: dias }, (_, i) => ({
-      rotulo: new Date(
-        inicio.getFullYear(),
-        inicio.getMonth(),
-        inicio.getDate() + i,
-      ).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
-      alcance: 0,
-    }));
+    pontos = Array.from({ length: dias }, (_, i) => {
+      const dia = new Date(inicio.getFullYear(), inicio.getMonth(), inicio.getDate() + i);
+      const data = dia.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+      return {
+        rotulo: data,
+        detalhe:
+          periodo === "semana"
+            ? `${dia.toLocaleDateString("pt-BR", { weekday: "long" })}, ${data}`
+            : dia.toLocaleDateString("pt-BR", { day: "2-digit", month: "long" }),
+        diaSemana: periodo === "semana" ? curtoSemPonto(dia, { weekday: "short" }) : null,
+        inicioMes:
+          periodo === "mes" && (i === 0 || dia.getDate() === 1)
+            ? curtoSemPonto(dia, { month: "short" })
+            : null,
+        alcance: 0,
+      };
+    });
     indice = (data) =>
       Math.round(
         (new Date(data.getFullYear(), data.getMonth(), data.getDate()).getTime() -
@@ -130,6 +161,97 @@ function serieAlcance(posts: Post[], periodo: Periodo, agora: Date) {
     if (ponto && data <= agora) ponto.alcance += post.alcance;
   }
   return pontos;
+}
+
+// Semana do mês contando de segunda-feira: a semana 1 é a que contém o dia 1.
+function semanaDoMes(data: Date) {
+  const deslocamento = (new Date(data.getFullYear(), data.getMonth(), 1).getDay() + 6) % 7;
+  return Math.ceil((data.getDate() + deslocamento) / 7);
+}
+
+// Recorte observado, exibido ao lado do título: ano, meses, semana do mês ou o dia.
+function recortePeriodo(periodo: Periodo, agora: Date) {
+  const inicio = inicioPeriodo(periodo, agora);
+  const mesLongo = (data: Date) => data.toLocaleDateString("pt-BR", { month: "long" });
+  if (periodo === "ano") {
+    return inicio.getFullYear() === agora.getFullYear()
+      ? String(agora.getFullYear())
+      : `${inicio.getFullYear()}–${agora.getFullYear()}`;
+  }
+  if (periodo === "mes") {
+    if (inicio.getMonth() === agora.getMonth()) {
+      return `${mesLongo(agora)} de ${agora.getFullYear()}`;
+    }
+    return inicio.getFullYear() === agora.getFullYear()
+      ? `${mesLongo(inicio)} – ${mesLongo(agora)} de ${agora.getFullYear()}`
+      : `${mesLongo(inicio)} de ${inicio.getFullYear()} – ${mesLongo(agora)} de ${agora.getFullYear()}`;
+  }
+  if (periodo === "semana") {
+    const fim = new Date(inicio.getFullYear(), inicio.getMonth(), inicio.getDate() + 6);
+    const curta = (data: Date) =>
+      data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    return `semana ${semanaDoMes(agora)} de ${mesLongo(agora)} · ${curta(inicio)} a ${curta(fim)}`;
+  }
+  return agora.toLocaleDateString("pt-BR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+// Rótulos do eixo X. Semana: data com o dia da semana embaixo. Mês: o dia e, na virada do mês,
+// um traço separador com o nome do mês abaixo das datas.
+function TickEixo({
+  x,
+  y,
+  index,
+  payload,
+  serie,
+  periodo,
+}: {
+  x: number;
+  y: number;
+  index: number;
+  payload: { offset?: number };
+  serie: Ponto[];
+  periodo: Periodo;
+}) {
+  const ponto = serie[index];
+  if (!ponto) return <g />;
+  if (periodo === "semana") {
+    return (
+      <g transform={`translate(${x},${y})`}>
+        <text dy={12} textAnchor="middle" className="fill-fg text-[11px]">
+          {ponto.rotulo}
+        </text>
+        <text dy={26} textAnchor="middle" className="fill-mute font-mono text-[10px] uppercase">
+          {ponto.diaSemana}
+        </text>
+      </g>
+    );
+  }
+  // Borda esquerda da fatia: o separador fica entre o último dia de um mês e o dia 1 do outro.
+  const borda = -(payload.offset ?? 0);
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text
+        dy={12}
+        textAnchor="middle"
+        className={cn("fill-mute text-[10px]", index % 2 === 1 && "max-sm:hidden")}
+      >
+        {ponto.rotulo.slice(0, 2)}
+      </text>
+      {ponto.inicioMes && (
+        <>
+          {index > 0 && <line x1={borda} x2={borda} y1={2} y2={36} className="stroke-fg/40" />}
+          <text x={borda + 4} dy={32} className="fill-fg font-mono text-[10px] uppercase">
+            {ponto.inicioMes}
+          </text>
+        </>
+      )}
+    </g>
+  );
 }
 
 function Relatorios() {
@@ -384,6 +506,7 @@ function GraficoAlcance({
     alcance: { label: "Alcance", color: COR_GRAFICO[rede] ?? "var(--mute)" },
   } satisfies ChartConfig;
   const descricao = PERIODOS.find((p) => p.valor === periodo)?.descricao ?? "";
+  const recorte = recortePeriodo(periodo, agora);
 
   return (
     <Dialog
@@ -394,8 +517,9 @@ function GraficoAlcance({
     >
       <DialogContent className="max-h-[90vh] w-[calc(100%-2rem)] overflow-y-auto rounded-xl border-line/70 bg-panel text-fg sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle className="font-display text-2xl font-normal uppercase tracking-tight">
+          <DialogTitle className="flex flex-wrap items-baseline gap-x-3 gap-y-1 font-display text-2xl font-normal uppercase tracking-tight">
             Alcance · {rede}
+            <span className="font-mono text-xs tracking-[0.12em] text-volt">{recorte}</span>
           </DialogTitle>
           <DialogDescription className="text-mute">
             Soma do alcance dos posts realizados {descricao}.
@@ -470,7 +594,19 @@ function GraficoAlcance({
               tickLine={false}
               axisLine={false}
               tickMargin={8}
-              minTickGap={8}
+              {...(periodo === "mes" || periodo === "semana"
+                ? {
+                    // Todos os dias aparecem, para o separador de mês nunca ser omitido.
+                    interval: 0,
+                    height: periodo === "mes" ? 44 : 40,
+                    tick: (props: {
+                      x: number;
+                      y: number;
+                      index: number;
+                      payload: { offset?: number };
+                    }) => <TickEixo {...props} serie={serie} periodo={periodo} />,
+                  }
+                : { minTickGap: 8 })}
             />
             <YAxis
               tickLine={false}
@@ -479,7 +615,11 @@ function GraficoAlcance({
               allowDecimals={false}
               tickFormatter={(valor: number) => numeroCurto(valor)}
             />
-            <ChartTooltip content={<ChartTooltipContent />} />
+            <ChartTooltip
+              content={
+                <ChartTooltipContent labelFormatter={(_, itens) => itens[0]?.payload?.detalhe} />
+              }
+            />
             <Bar
               dataKey="alcance"
               fill="var(--color-alcance)"
