@@ -134,6 +134,30 @@ export type Database = {
         }
         Relationships: []
       }
+      social_credenciais: {
+        Row: {
+          atualizado_em: string
+          client_id: string
+          client_secret: string
+          rede: string
+          user_id: string
+        }
+        Insert: {
+          atualizado_em?: string
+          client_id: string
+          client_secret: string
+          rede: string
+          user_id?: string
+        }
+        Update: {
+          atualizado_em?: string
+          client_id?: string
+          client_secret?: string
+          rede?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       social_tokens: {
         Row: {
           access_token: string

@@ -15,6 +15,13 @@
       "when": 1790281914642,
       "tag": "0001_conexao_redes",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790594678792,
+      "tag": "0002_credenciais_redes",
+      "breakpoints": true
     }
   ]
 }

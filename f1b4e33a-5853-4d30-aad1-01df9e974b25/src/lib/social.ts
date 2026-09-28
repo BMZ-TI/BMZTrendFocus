@@ -1,10 +1,4 @@
-export const REDES = [
-  "Instagram",
-  "TikTok",
-  "LinkedIn",
-  "YouTube",
-  "Facebook",
-] as const;
+export const REDES = ["Instagram", "TikTok", "LinkedIn", "YouTube", "Facebook"] as const;
 
 export type Rede = (typeof REDES)[number];
 
@@ -45,21 +39,9 @@ export function numeroCurto(n: number) {
   return String(n);
 }
 
-export const FORMATOS = [
-  "Reels",
-  "Carrossel",
-  "Post estático",
-  "Story",
-  "Artigo",
-];
+export const FORMATOS = ["Reels", "Carrossel", "Post estático", "Story", "Artigo"];
 
-export const TONS = [
-  "Direto",
-  "Amigável",
-  "Provocativo",
-  "Técnico",
-  "Inspirador",
-];
+export const TONS = ["Direto", "Amigável", "Provocativo", "Técnico", "Inspirador"];
 
 // Cor sólida da rede, para marcadores pequenos (pontos do calendário, legenda).
 export function corPontoRede(rede: string) {
@@ -93,3 +75,51 @@ export function paraInputLocal(data: Date) {
   const deslocamento = data.getTimezoneOffset() * 60000;
   return new Date(data.getTime() - deslocamento).toISOString().slice(0, 16);
 }
+
+// O que cada rede exige para a conexão OAuth: nomes dos campos no portal, onde criar o app,
+// o que habilitar e o caminho de retorno (<origem>/api/oauth/callback/<slug>).
+export const API_REDES: Record<
+  string,
+  { slug: string; campoId: string; campoSegredo: string; portal: string; requisitos: string }
+> = {
+  Instagram: {
+    slug: "instagram",
+    campoId: "Instagram App ID",
+    campoSegredo: "Instagram App Secret",
+    portal: "https://developers.facebook.com/apps",
+    requisitos:
+      "App da Meta com o produto Instagram (login empresarial) e as permissões instagram_business_basic e instagram_business_content_publish. Só funciona com contas Business ou Creator.",
+  },
+  Facebook: {
+    slug: "facebook",
+    campoId: "App ID",
+    campoSegredo: "App Secret",
+    portal: "https://developers.facebook.com/apps",
+    requisitos:
+      "App da Meta com Facebook Login for Business e as permissões pages_show_list, pages_manage_posts e pages_read_engagement.",
+  },
+  TikTok: {
+    slug: "tiktok",
+    campoId: "Client Key",
+    campoSegredo: "Client Secret",
+    portal: "https://developers.tiktok.com/apps",
+    requisitos:
+      "App com Login Kit e Content Posting API, com os escopos user.info.basic e video.publish.",
+  },
+  LinkedIn: {
+    slug: "linkedin",
+    campoId: "Client ID",
+    campoSegredo: "Client Secret",
+    portal: "https://www.linkedin.com/developers/apps",
+    requisitos:
+      "App com os produtos Sign In with LinkedIn using OpenID Connect e Share on LinkedIn.",
+  },
+  YouTube: {
+    slug: "youtube",
+    campoId: "Client ID",
+    campoSegredo: "Client Secret",
+    portal: "https://console.cloud.google.com/apis/credentials",
+    requisitos:
+      "Cliente OAuth do tipo Aplicativo da Web no Google Cloud, com a YouTube Data API v3 ativada e a tela de consentimento configurada.",
+  },
+};

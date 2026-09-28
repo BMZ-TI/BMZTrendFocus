@@ -1,7 +1,12 @@
-// Conexão OAuth das contas sociais ("Conectar agora" em Contas).
-// Somente servidor: usa os segredos dos apps de cada rede e grava os tokens com a service role.
+// Conexão OAuth das contas sociais ("Conectar" em Contas). Somente servidor.
+// As credenciais dos apps (cadastradas na tela Contas) e os tokens ficam no banco cifrados com
+// AES-GCM (chave derivada de OAUTH_STATE_SECRET) e são lidos/gravados com a sessão do próprio
+// usuário (RLS) — não é preciso service role nem chaves das redes no .env.
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getRequest } from "@tanstack/react-start/server";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import type { Database } from "@/integrations/supabase/types";
+
+type Banco = SupabaseClient<Database>;
 
 type Json = Record<string, unknown>;
 
@@ -17,25 +22,16 @@ type Credenciais = { clientId: string; clientSecret: string };
 
 type Provedor = {
   slug: string;
-  env: string;
   autorizacao: string;
   paramCliente: "client_id" | "client_key";
   escopos: string;
   extras?: Record<string, string>;
-  trocarCodigo: (
-    dados: Credenciais & { code: string; redirectUri: string },
-  ) => Promise<Tokens>;
-  perfil: (
-    accessToken: string,
-  ) => Promise<{ id: string | null; usuario: string | null }>;
+  trocarCodigo: (dados: Credenciais & { code: string; redirectUri: string }) => Promise<Tokens>;
+  perfil: (accessToken: string) => Promise<{ id: string | null; usuario: string | null }>;
 };
 
 // c = conta, u = usuário, r = rede, e = expiração (ms), n = nonce
 type Estado = { c: string; u: string; r: string; e: number; n: string };
-
-// Códigos lidos pela página Contas; nunca texto livre na URL.
-export type MotivoFalha =
-  "cancelada" | "invalida" | "config" | "perfil" | "falha" | "rede";
 
 const GRAPH = "v23.0";
 
@@ -102,7 +98,6 @@ function exigirToken(corpo: Json, rede: string) {
 const PROVEDORES: Record<string, Provedor> = {
   Instagram: {
     slug: "instagram",
-    env: "INSTAGRAM",
     autorizacao: "https://www.instagram.com/oauth/authorize",
     paramCliente: "client_id",
     escopos: "instagram_business_basic,instagram_business_content_publish",
@@ -118,9 +113,7 @@ const PROVEDORES: Record<string, Provedor> = {
         }),
       );
       // A API atual devolve {"data": [{...}]}; versões antigas, o objeto direto.
-      const curto = Array.isArray(resposta["data"])
-        ? primeiro(resposta["data"])
-        : resposta;
+      const curto = Array.isArray(resposta["data"]) ? primeiro(resposta["data"]) : resposta;
       // Troca o token curto (1 hora) pelo de longa duração (~60 dias).
       const longo = await pedirJson(
         `https://graph.instagram.com/access_token?${new URLSearchParams({
@@ -144,15 +137,11 @@ const PROVEDORES: Record<string, Provedor> = {
           access_token: accessToken,
         })}`,
       );
-      return {
-        id: texto(eu["user_id"]) ?? texto(eu["id"]),
-        usuario: texto(eu["username"]),
-      };
+      return { id: texto(eu["user_id"]) ?? texto(eu["id"]), usuario: texto(eu["username"]) };
     },
   },
   Facebook: {
     slug: "facebook",
-    env: "FACEBOOK",
     autorizacao: `https://www.facebook.com/${GRAPH}/dialog/oauth`,
     paramCliente: "client_id",
     escopos: "pages_show_list,pages_manage_posts,pages_read_engagement",
@@ -195,7 +184,6 @@ const PROVEDORES: Record<string, Provedor> = {
   },
   TikTok: {
     slug: "tiktok",
-    env: "TIKTOK",
     autorizacao: "https://www.tiktok.com/v2/auth/authorize/",
     paramCliente: "client_key",
     escopos: "user.info.basic,video.publish",
@@ -224,15 +212,11 @@ const PROVEDORES: Record<string, Provedor> = {
         comBearer(accessToken),
       );
       const usuario = objeto(objeto(r["data"])["user"]);
-      return {
-        id: texto(usuario["open_id"]),
-        usuario: texto(usuario["display_name"]),
-      };
+      return { id: texto(usuario["open_id"]), usuario: texto(usuario["display_name"]) };
     },
   },
   LinkedIn: {
     slug: "linkedin",
-    env: "LINKEDIN",
     autorizacao: "https://www.linkedin.com/oauth/v2/authorization",
     paramCliente: "client_id",
     escopos: "openid profile w_member_social",
@@ -256,26 +240,18 @@ const PROVEDORES: Record<string, Provedor> = {
       };
     },
     async perfil(accessToken) {
-      const r = await pedirJson(
-        "https://api.linkedin.com/v2/userinfo",
-        comBearer(accessToken),
-      );
+      const r = await pedirJson("https://api.linkedin.com/v2/userinfo", comBearer(accessToken));
       return { id: texto(r["sub"]), usuario: texto(r["name"]) };
     },
   },
   YouTube: {
     slug: "youtube",
-    env: "YOUTUBE",
     autorizacao: "https://accounts.google.com/o/oauth2/v2/auth",
     paramCliente: "client_id",
     escopos:
       "https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.upload",
     // offline + consent garantem o refresh_token.
-    extras: {
-      access_type: "offline",
-      prompt: "consent",
-      include_granted_scopes: "true",
-    },
+    extras: { access_type: "offline", prompt: "consent", include_granted_scopes: "true" },
     async trocarCodigo({ code, redirectUri, clientId, clientSecret }) {
       const r = await pedirJson(
         "https://oauth2.googleapis.com/token",
@@ -315,24 +291,19 @@ const codificador = new TextEncoder();
 function base64url(bytes: Uint8Array) {
   let binario = "";
   for (const byte of bytes) binario += String.fromCharCode(byte);
-  return btoa(binario)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
+  return btoa(binario).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 function deBase64url(valor: string) {
-  return Uint8Array.from(
-    atob(valor.replace(/-/g, "+").replace(/_/g, "/")),
-    (c) => c.charCodeAt(0),
-  );
+  return Uint8Array.from(atob(valor.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
 }
 
-async function chaveEstado() {
-  const segredo =
-    process.env["OAUTH_STATE_SECRET"] ||
-    process.env["SUPABASE_SERVICE_ROLE_KEY"];
-  if (!segredo) return null;
+// Único segredo do servidor para as conexões: assina o state e cifra credenciais e tokens.
+function segredoServidor() {
+  return process.env["OAUTH_STATE_SECRET"] || null;
+}
+
+async function chaveEstado(segredo: string) {
   return crypto.subtle.importKey(
     "raw",
     codificador.encode(`bmz-oauth-state:${segredo}`),
@@ -342,32 +313,60 @@ async function chaveEstado() {
   );
 }
 
-// O state leva conta e usuário assinados (HMAC): o retorno não depende da sessão do navegador.
-async function assinarEstado(chave: CryptoKey, estado: Estado) {
+async function chaveCifra(segredo: string) {
+  const bruto = await crypto.subtle.digest("SHA-256", codificador.encode(`bmz-cifra:${segredo}`));
+  return crypto.subtle.importKey("raw", bruto, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+}
+
+// Formato: v1.<iv>.<dados>, em base64url. Devolve null se o servidor não tiver o segredo.
+export async function cifrar(valor: string) {
+  const segredo = segredoServidor();
+  if (!segredo) return null;
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const dados = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    await chaveCifra(segredo),
+    codificador.encode(valor),
+  );
+  return `v1.${base64url(iv)}.${base64url(new Uint8Array(dados))}`;
+}
+
+async function decifrar(valor: string) {
+  const segredo = segredoServidor();
+  const [versao, iv, dados] = valor.split(".");
+  if (!segredo || versao !== "v1" || !iv || !dados) throw new Error("Valor cifrado inválido.");
+  const aberto = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: deBase64url(iv) },
+    await chaveCifra(segredo),
+    deBase64url(dados),
+  );
+  return new TextDecoder().decode(aberto);
+}
+
+// O state leva conta, usuário e rede assinados (HMAC) e expira em 10 minutos.
+async function assinarEstado(segredo: string, estado: Estado) {
   const corpo = base64url(codificador.encode(JSON.stringify(estado)));
   const assinatura = await crypto.subtle.sign(
     "HMAC",
-    chave,
+    await chaveEstado(segredo),
     codificador.encode(corpo),
   );
   return `${corpo}.${base64url(new Uint8Array(assinatura))}`;
 }
 
-async function lerEstado(valor: string | null): Promise<Estado | null> {
-  const chave = await chaveEstado();
-  const [corpo, assinatura] = (valor ?? "").split(".");
-  if (!chave || !corpo || !assinatura) return null;
+async function lerEstado(valor: string): Promise<Estado | null> {
+  const segredo = segredoServidor();
+  const [corpo, assinatura] = valor.split(".");
+  if (!segredo || !corpo || !assinatura) return null;
   try {
     const valido = await crypto.subtle.verify(
       "HMAC",
-      chave,
+      await chaveEstado(segredo),
       deBase64url(assinatura),
       codificador.encode(corpo),
     );
     if (!valido) return null;
-    const estado = JSON.parse(
-      new TextDecoder().decode(deBase64url(corpo)),
-    ) as Estado;
+    const estado = JSON.parse(new TextDecoder().decode(deBase64url(corpo))) as Estado;
     return estado.e > Date.now() ? estado : null;
   } catch {
     return null;
@@ -375,47 +374,54 @@ async function lerEstado(valor: string | null): Promise<Estado | null> {
 }
 
 // APP_URL fixa a origem atrás de proxy; precisa ser igual à URL de retorno cadastrada na rede.
-function urlRetorno(provedor: Provedor, request: Request) {
-  const origem =
-    process.env["APP_URL"]?.replace(/\/+$/, "") || new URL(request.url).origin;
+function urlRetorno(provedor: Provedor) {
+  const origem = process.env["APP_URL"]?.replace(/\/+$/, "") || new URL(getRequest().url).origin;
   return `${origem}/api/oauth/callback/${provedor.slug}`;
 }
 
-function credenciais(provedor: Provedor): Credenciais | null {
-  const clientId = process.env[`${provedor.env}_CLIENT_ID`];
-  const clientSecret = process.env[`${provedor.env}_CLIENT_SECRET`];
-  return clientId && clientSecret ? { clientId, clientSecret } : null;
+// Credenciais do app da rede cadastradas pelo usuário; o segredo só é decifrado aqui no servidor.
+async function credenciais(db: Banco, userId: string, rede: string): Promise<Credenciais | null> {
+  const { data } = await db
+    .from("social_credenciais")
+    .select("client_id, client_secret")
+    .eq("user_id", userId)
+    .eq("rede", rede)
+    .maybeSingle();
+  if (!data) return null;
+  return { clientId: data.client_id, clientSecret: await decifrar(data.client_secret) };
 }
 
-export async function montarUrlAutorizacao(conta: {
-  id: string;
+export async function montarUrlAutorizacao({
+  db,
+  userId,
+  conta,
+}: {
+  db: Banco;
   userId: string;
-  rede: string;
+  conta: { id: string; rede: string };
 }): Promise<{ url: string } | { erro: string }> {
   const provedor = PROVEDORES[conta.rede];
-  if (!provedor)
-    return { erro: `A conexão com ${conta.rede} ainda não é suportada.` };
-  const cred = credenciais(provedor);
-  if (!cred) {
-    return {
-      erro: `Conexão com ${conta.rede} ainda não configurada: defina ${provedor.env}_CLIENT_ID e ${provedor.env}_CLIENT_SECRET no servidor.`,
-    };
+  if (!provedor) return { erro: `A conexão com ${conta.rede} ainda não é suportada.` };
+  const segredo = segredoServidor();
+  if (!segredo)
+    return { erro: "Defina OAUTH_STATE_SECRET no servidor para habilitar as conexões." };
+  let cred: Credenciais | null;
+  try {
+    cred = await credenciais(db, userId, conta.rede);
+  } catch {
+    return { erro: `Não foi possível ler as credenciais do ${conta.rede}. Cadastre-as novamente.` };
   }
-  const chave = await chaveEstado();
-  if (!chave)
-    return {
-      erro: "Defina OAUTH_STATE_SECRET no servidor para habilitar as conexões.",
-    };
-  const state = await assinarEstado(chave, {
+  if (!cred) return { erro: `Cadastre as credenciais da API do ${conta.rede} antes de conectar.` };
+  const state = await assinarEstado(segredo, {
     c: conta.id,
-    u: conta.userId,
+    u: userId,
     r: conta.rede,
     e: Date.now() + 10 * 60_000,
     n: base64url(crypto.getRandomValues(new Uint8Array(12))),
   });
   const params = new URLSearchParams({
     [provedor.paramCliente]: cred.clientId,
-    redirect_uri: urlRetorno(provedor, getRequest()),
+    redirect_uri: urlRetorno(provedor),
     response_type: "code",
     scope: provedor.escopos,
     state,
@@ -424,70 +430,65 @@ export async function montarUrlAutorizacao(conta: {
   return { url: `${provedor.autorizacao}?${params}` };
 }
 
-export async function concluirConexao(
-  request: Request,
-  slug: string,
-): Promise<Response> {
-  const url = new URL(request.url);
-  const achado = Object.entries(PROVEDORES).find(([, p]) => p.slug === slug);
-  const rede = achado?.[0] ?? "";
-  const voltar = (motivo?: MotivoFalha) => {
-    const busca = new URLSearchParams({
-      conexao: motivo ? "erro" : "ok",
-      rede,
-    });
-    if (motivo) busca.set("motivo", motivo);
-    return new Response(null, {
-      status: 302,
-      headers: { location: `/contas?${busca}` },
-    });
-  };
-  if (!achado) return voltar("rede");
-  const provedor = achado[1];
-
-  if (url.searchParams.get("error")) return voltar("cancelada");
-  const code = url.searchParams.get("code");
-  const estado = await lerEstado(url.searchParams.get("state"));
-  if (!code || !estado || estado.r !== rede) return voltar("invalida");
-  const cred = credenciais(provedor);
-  if (!cred) return voltar("config");
-
+// Chamado pela página Contas com o code/state que a rede devolveu, já com a sessão do usuário.
+export async function concluirConexao({
+  db,
+  userId,
+  rede,
+  code,
+  state,
+}: {
+  db: Banco;
+  userId: string;
+  rede: string;
+  code: string;
+  state: string;
+}): Promise<{ ok: true } | { erro: string }> {
+  const provedor = PROVEDORES[rede];
+  const estado = await lerEstado(state);
+  if (!provedor || !estado || estado.r !== rede || estado.u !== userId) {
+    return { erro: "O link de conexão expirou ou é inválido. Tente conectar novamente." };
+  }
   try {
-    const { data: conta } = await supabaseAdmin
+    const { data: conta } = await db
       .from("social_accounts")
-      .select("id, user_id")
+      .select("id")
       .eq("id", estado.c)
       .maybeSingle();
-    if (!conta || conta.user_id !== estado.u) return voltar("perfil");
+    if (!conta) return { erro: "Perfil não encontrado." };
+    const cred = await credenciais(db, userId, rede);
+    if (!cred) return { erro: `Cadastre as credenciais da API do ${rede} antes de conectar.` };
 
     const tokens = await provedor.trocarCodigo({
       ...cred,
       code,
-      redirectUri: urlRetorno(provedor, request),
+      redirectUri: urlRetorno(provedor),
     });
-    const perfil = await provedor
-      .perfil(tokens.accessToken)
-      .catch((erro: unknown) => {
-        console.error(erro);
-        return { id: null, usuario: null };
-      });
+    const perfil = await provedor.perfil(tokens.accessToken).catch((erro: unknown) => {
+      console.error(erro);
+      return { id: null, usuario: null };
+    });
+    const [accessToken, refreshToken] = await Promise.all([
+      cifrar(tokens.accessToken),
+      tokens.refreshToken ? cifrar(tokens.refreshToken) : null,
+    ]);
+    if (!accessToken) throw new Error("OAUTH_STATE_SECRET ausente.");
+
     const agora = new Date();
-    const { error: erroToken } = await supabaseAdmin
-      .from("social_tokens")
-      .upsert({
-        conta_id: conta.id,
-        user_id: conta.user_id,
-        access_token: tokens.accessToken,
-        refresh_token: tokens.refreshToken,
-        expira_em: tokens.expiraEm
-          ? new Date(agora.getTime() + tokens.expiraEm * 1000).toISOString()
-          : null,
-        escopos: tokens.escopos,
-        id_externo: perfil.id ?? tokens.idExterno,
-        atualizado_em: agora.toISOString(),
-      });
+    const { error: erroToken } = await db.from("social_tokens").upsert({
+      conta_id: conta.id,
+      user_id: userId,
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      expira_em: tokens.expiraEm
+        ? new Date(agora.getTime() + tokens.expiraEm * 1000).toISOString()
+        : null,
+      escopos: tokens.escopos,
+      id_externo: perfil.id ?? tokens.idExterno,
+      atualizado_em: agora.toISOString(),
+    });
     if (erroToken) throw erroToken;
-    const { error: erroConta } = await supabaseAdmin
+    const { error: erroConta } = await db
       .from("social_accounts")
       .update({
         conectada: true,
@@ -496,9 +497,9 @@ export async function concluirConexao(
       })
       .eq("id", conta.id);
     if (erroConta) throw erroConta;
-    return voltar();
+    return { ok: true };
   } catch (erro) {
     console.error(erro);
-    return voltar("falha");
+    return { erro: `Não foi possível concluir a conexão com ${rede}. Tente novamente.` };
   }
 }
