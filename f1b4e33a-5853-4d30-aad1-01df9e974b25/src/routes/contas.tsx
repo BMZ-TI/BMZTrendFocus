@@ -407,17 +407,29 @@ function ModalCredenciais({
         if (!aberto) aoFechar();
       }}
     >
-      <DialogContent className="max-h-[90vh] w-[calc(100%-2rem)] overflow-y-auto rounded-xl border-line/70 bg-panel text-fg sm:max-w-lg">
-        <DialogHeader>
+      {/* Tamanho fixo (32rem × 35rem; no celular, mais alto): cabeçalho e rodapé fixos e só o
+          corpo rola, na vertical, se a tela for baixa demais. */}
+      <DialogContent className="flex h-[min(88vh,44rem)] w-[calc(100vw-2rem)] sm:h-[min(88vh,35rem)] max-w-lg flex-col gap-0 overflow-hidden rounded-xl border-line/70 bg-panel p-0 text-fg">
+        <DialogHeader className="shrink-0 space-y-2 border-b border-line/60 px-6 pb-4 pr-12 pt-6 text-left">
+          <span
+            className={`w-fit rounded-md px-2 py-1 font-mono text-[10px] uppercase ${corDaRede(rede)}`}
+          >
+            {rede}
+          </span>
           <DialogTitle className="font-display text-2xl font-normal uppercase tracking-tight">
-            Credenciais da API · {rede}
+            Credenciais da API
           </DialogTitle>
           <DialogDescription className="text-mute">
             Valem para todos os perfis {rede} da sua conta. O segredo é guardado cifrado e não volta
             a ser exibido.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={cadastrar} autoComplete="off" className="space-y-3">
+        <form
+          id="form-credenciais"
+          onSubmit={cadastrar}
+          autoComplete="off"
+          className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden px-6 py-5"
+        >
           <CampoSecreto
             id="credencial-id"
             rotulo={info?.campoId ?? "Client ID"}
@@ -434,7 +446,7 @@ function ModalCredenciais({
           <div>
             <div className="label-mono">url de retorno · cadastre no app da rede</div>
             <div className="mt-1.5 flex items-center gap-2 rounded-lg bg-ink px-3 py-2 ring-1 ring-fg/10">
-              <code className="min-w-0 flex-1 truncate font-mono text-xs" title={urlRetorno}>
+              <code className="min-w-0 flex-1 break-all font-mono text-xs leading-relaxed">
                 {urlRetorno}
               </code>
               <button
@@ -448,7 +460,7 @@ function ModalCredenciais({
             </div>
           </div>
           {info && (
-            <p className="text-xs leading-relaxed text-mute">
+            <p className="break-words text-xs leading-relaxed text-mute">
               {info.requisitos}{" "}
               <a
                 href={info.portal}
@@ -460,15 +472,20 @@ function ModalCredenciais({
               </a>
             </p>
           )}
-          <DialogFooter className="gap-2 pt-2 sm:gap-0">
-            <button type="button" onClick={aoFechar} className={botaoSecundario}>
-              Cancelar
-            </button>
-            <button type="submit" disabled={!completo || salvando} className={botaoPrimario}>
-              {salvando ? "Salvando…" : "Cadastrar"}
-            </button>
-          </DialogFooter>
         </form>
+        <DialogFooter className="shrink-0 flex-row justify-end gap-2 border-t border-line/60 px-6 py-4 sm:space-x-0">
+          <button type="button" onClick={aoFechar} className={botaoSecundario}>
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            form="form-credenciais"
+            disabled={!completo || salvando}
+            className={botaoPrimario}
+          >
+            {salvando ? "Salvando…" : "Cadastrar"}
+          </button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
