@@ -39,6 +39,7 @@ export const concluirConexao = createServerFn({ method: "POST" })
 
 // Guarda o Client ID e o Client Secret do app da rede. O segredo é cifrado aqui e nunca volta
 // ao navegador; as credenciais valem para todos os perfis daquela rede do usuário.
+// Segredo em branco = manter o que já está guardado (troca só o Client ID).
 export const salvarCredenciais = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) =>
@@ -46,11 +47,25 @@ export const salvarCredenciais = createServerFn({ method: "POST" })
       .object({
         rede: Rede,
         clientId: z.string().trim().min(1).max(500),
-        clientSecret: z.string().trim().min(1).max(500),
+        clientSecret: z.string().trim().max(500),
       })
       .parse(input),
   )
   .handler(async ({ data, context }): Promise<{ ok: true } | { erro: string }> => {
+    if (!data.clientSecret) {
+      const { data: linhas, error } = await context.supabase
+        .from("social_credenciais")
+        .update({ client_id: data.clientId, atualizado_em: new Date().toISOString() })
+        .eq("user_id", context.userId)
+        .eq("rede", data.rede)
+        .select("rede");
+      if (error) {
+        console.error(error);
+        return { erro: "Não foi possível salvar as credenciais." };
+      }
+      if (!linhas.length) return { erro: "Informe o segredo para cadastrar as credenciais." };
+      return { ok: true };
+    }
     const { cifrar } = await import("./oauth.server");
     const segredo = await cifrar(data.clientSecret);
     if (!segredo)

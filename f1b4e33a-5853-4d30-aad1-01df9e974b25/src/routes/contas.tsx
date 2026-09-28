@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, Copy, Eye, EyeOff } from "lucide-react";
+import { ChevronDown, Copy, Eye, EyeOff, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
 import {
@@ -25,7 +25,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { concluirConexao, iniciarConexao, salvarCredenciais } from "@/lib/conexao.functions";
 import { consultaContas } from "@/lib/queries";
 import { API_REDES, REDES, corDaRede, formatarData } from "@/lib/social";
-import { tituloPagina } from "@/lib/utils";
+import { cn, tituloPagina } from "@/lib/utils";
 
 type BuscaContas = {
   conexao?: "erro";
@@ -245,7 +245,7 @@ function Contas() {
                       </DropdownMenuLabel>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onSelect={() => setModalRede(c.rede)}>
-                        {credencial ? "Editar credenciais da API" : "Cadastrar credenciais da API"}
+                        {credencial ? "Ver credenciais da API" : "Cadastrar credenciais da API"}
                       </DropdownMenuItem>
                       <DropdownMenuItem disabled={!credencial} onSelect={() => conectar(c.id)}>
                         {c.conectada_em ? "Reconectar" : "Conectar agora"}
@@ -351,7 +351,7 @@ function Contas() {
       {modalRede && (
         <ModalCredenciais
           rede={modalRede}
-          clientIdAtual={credencialDa(modalRede)?.client_id ?? null}
+          credencial={credencialDa(modalRede) ?? null}
           aoFechar={() => setModalRede(null)}
         />
       )}
@@ -359,28 +359,40 @@ function Contas() {
   );
 }
 
-// Cadastro das credenciais do app da rede. Os dois campos são obrigatórios e mascarados.
+// Credenciais do app da rede. Depois de cadastradas ficam fixas: o modal abre só para consulta
+// e só "Alterar chave" libera a edição. Nada muda no banco sem "Salvar"; cancelar ou fechar
+// descarta o que foi digitado. Os campos são mascarados.
 function ModalCredenciais({
   rede,
-  clientIdAtual,
+  credencial,
   aoFechar,
 }: {
   rede: string;
-  clientIdAtual: string | null;
+  credencial: { client_id: string; atualizado_em: string } | null;
   aoFechar: () => void;
 }) {
   const queryClient = useQueryClient();
   const salvar = useServerFn(salvarCredenciais);
   const info = API_REDES[rede];
-  const [clientId, setClientId] = useState(clientIdAtual ?? "");
+  const cadastrado = credencial !== null;
+  const [editando, setEditando] = useState(!cadastrado);
+  const [clientId, setClientId] = useState(credencial?.client_id ?? "");
   const [clientSecret, setClientSecret] = useState("");
   const [salvando, setSalvando] = useState(false);
-  const completo = clientId.trim() !== "" && clientSecret.trim() !== "";
+  const alterou = clientId.trim() !== (credencial?.client_id ?? "") || clientSecret.trim() !== "";
+  // Na alteração, o segredo em branco mantém o que já está guardado.
+  const podeSalvar = clientId.trim() !== "" && (cadastrado ? alterou : clientSecret.trim() !== "");
   const urlRetorno = `${window.location.origin}/api/oauth/callback/${info?.slug ?? ""}`;
 
-  async function cadastrar(e: React.FormEvent) {
+  function cancelarAlteracao() {
+    setClientId(credencial?.client_id ?? "");
+    setClientSecret("");
+    setEditando(false);
+  }
+
+  async function gravar(e: React.FormEvent) {
     e.preventDefault();
-    if (!completo) return;
+    if (!editando || !podeSalvar) return;
     setSalvando(true);
     try {
       const resultado = await salvar({
@@ -391,7 +403,9 @@ function ModalCredenciais({
         return;
       }
       queryClient.invalidateQueries({ queryKey: ["credenciais"] });
-      toast.success(`Credenciais do ${rede} cadastradas.`);
+      toast.success(
+        cadastrado ? `Credenciais do ${rede} atualizadas.` : `Credenciais do ${rede} cadastradas.`,
+      );
       aoFechar();
     } catch {
       toast.error("Não foi possível salvar as credenciais.");
@@ -409,7 +423,7 @@ function ModalCredenciais({
     >
       {/* Tamanho fixo (32rem × 35rem; no celular, mais alto): cabeçalho e rodapé fixos e só o
           corpo rola, na vertical, se a tela for baixa demais. */}
-      <DialogContent className="flex h-[min(88vh,44rem)] w-[calc(100vw-2rem)] sm:h-[min(88vh,35rem)] max-w-lg flex-col gap-0 overflow-hidden rounded-xl border-line/70 bg-panel p-0 text-fg">
+      <DialogContent className="flex h-[min(88vh,44rem)] w-[calc(100vw-2rem)] max-w-lg flex-col gap-0 overflow-hidden rounded-xl border-line/70 bg-panel p-0 text-fg sm:h-[min(88vh,35rem)]">
         <DialogHeader className="shrink-0 space-y-2 border-b border-line/60 px-6 pb-4 pr-12 pt-6 text-left">
           <span
             className={`w-fit rounded-md px-2 py-1 font-mono text-[10px] uppercase ${corDaRede(rede)}`}
@@ -420,13 +434,14 @@ function ModalCredenciais({
             Credenciais da API
           </DialogTitle>
           <DialogDescription className="text-mute">
-            Valem para todos os perfis {rede} da sua conta. O segredo é guardado cifrado e não volta
-            a ser exibido.
+            {credencial && !editando
+              ? `Cadastradas em ${formatarData(credencial.atualizado_em)}. Valem para todos os perfis ${rede} da sua conta.`
+              : `Valem para todos os perfis ${rede} da sua conta. O segredo é guardado cifrado e não volta a ser exibido.`}
           </DialogDescription>
         </DialogHeader>
         <form
           id="form-credenciais"
-          onSubmit={cadastrar}
+          onSubmit={gravar}
           autoComplete="off"
           className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden px-6 py-5"
         >
@@ -435,13 +450,17 @@ function ModalCredenciais({
             rotulo={info?.campoId ?? "Client ID"}
             valor={clientId}
             aoMudar={setClientId}
+            somenteLeitura={!editando}
           />
           <CampoSecreto
             id="credencial-segredo"
             rotulo={info?.campoSegredo ?? "Client Secret"}
-            valor={clientSecret}
+            valor={editando ? clientSecret : "••••••••••••••••"}
             aoMudar={setClientSecret}
-            placeholder={clientIdAtual ? "Digite o segredo novamente para salvar" : undefined}
+            somenteLeitura={!editando}
+            revelavel={editando}
+            obrigatorio={!cadastrado}
+            placeholder={cadastrado ? "Em branco, mantém o segredo atual" : undefined}
           />
           <div>
             <div className="label-mono">url de retorno · cadastre no app da rede</div>
@@ -474,64 +493,107 @@ function ModalCredenciais({
           )}
         </form>
         <DialogFooter className="shrink-0 flex-row justify-end gap-2 border-t border-line/60 px-6 py-4 sm:space-x-0">
-          <button type="button" onClick={aoFechar} className={botaoSecundario}>
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            form="form-credenciais"
-            disabled={!completo || salvando}
-            className={botaoPrimario}
-          >
-            {salvando ? "Salvando…" : "Cadastrar"}
-          </button>
+          {editando ? (
+            <>
+              <button
+                type="button"
+                onClick={cadastrado ? cancelarAlteracao : aoFechar}
+                className={botaoSecundario}
+              >
+                {cadastrado ? "Cancelar alteração" : "Cancelar"}
+              </button>
+              <button
+                type="submit"
+                form="form-credenciais"
+                disabled={!podeSalvar || salvando}
+                className={botaoPrimario}
+              >
+                {salvando ? "Salvando…" : cadastrado ? "Salvar alterações" : "Cadastrar"}
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" onClick={aoFechar} className={botaoSecundario}>
+                Fechar
+              </button>
+              <button type="button" onClick={() => setEditando(true)} className={botaoPrimario}>
+                Alterar chave
+              </button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-// Campo obrigatório mascarado como senha, com botão para mostrar o valor e corrigir.
+// Campo mascarado como senha, com botão para mostrar o valor e corrigir. Em modo de consulta
+// fica fixo; o segredo guardado nunca é revelado (só existe cifrado no servidor).
 function CampoSecreto({
   id,
   rotulo,
   valor,
   aoMudar,
   placeholder,
+  obrigatorio = true,
+  somenteLeitura = false,
+  revelavel = true,
 }: {
   id: string;
   rotulo: string;
   valor: string;
   aoMudar: (valor: string) => void;
   placeholder?: string | undefined;
+  obrigatorio?: boolean;
+  somenteLeitura?: boolean;
+  revelavel?: boolean;
 }) {
   const [visivel, setVisivel] = useState(false);
   return (
     <div>
       <label className="label-mono" htmlFor={id}>
-        {rotulo} *
+        {rotulo}
+        {obrigatorio && !somenteLeitura ? " *" : ""}
       </label>
-      <div className="mt-1.5 flex items-center rounded-lg bg-fg/[0.03] ring-1 ring-fg/10 focus-within:ring-volt/50">
+      <div
+        className={cn(
+          "mt-1.5 flex items-center rounded-lg ring-1",
+          somenteLeitura ? "bg-ink ring-fg/5" : "bg-fg/[0.03] ring-fg/10 focus-within:ring-volt/50",
+        )}
+      >
         <input
           id={id}
-          type={visivel ? "text" : "password"}
-          required
+          type={visivel && revelavel ? "text" : "password"}
+          required={obrigatorio && !somenteLeitura}
+          readOnly={somenteLeitura}
           value={valor}
           onChange={(e) => aoMudar(e.target.value)}
           placeholder={placeholder ?? rotulo}
           autoComplete="new-password"
           spellCheck={false}
-          className="min-w-0 flex-1 bg-transparent px-3 py-2 font-mono text-sm outline-none"
+          className={cn(
+            "min-w-0 flex-1 bg-transparent px-3 py-2 font-mono text-sm outline-none",
+            somenteLeitura && "cursor-default text-mute",
+          )}
         />
-        <button
-          type="button"
-          onClick={() => setVisivel((atual) => !atual)}
-          aria-label={visivel ? "Ocultar valor" : "Mostrar valor"}
-          aria-pressed={visivel}
-          className="grid size-9 shrink-0 place-items-center text-mute transition-colors hover:text-fg"
-        >
-          {visivel ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-        </button>
+        {revelavel ? (
+          <button
+            type="button"
+            onClick={() => setVisivel((atual) => !atual)}
+            aria-label={visivel ? "Ocultar valor" : "Mostrar valor"}
+            aria-pressed={visivel}
+            className="grid size-9 shrink-0 place-items-center text-mute transition-colors hover:text-fg"
+          >
+            {visivel ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+          </button>
+        ) : (
+          <span
+            title="Guardado cifrado: não é exibido"
+            className="grid size-9 shrink-0 place-items-center text-mute"
+          >
+            <Lock className="size-4" />
+          </span>
+        )}
       </div>
     </div>
   );
